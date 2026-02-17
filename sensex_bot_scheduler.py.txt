@@ -1,0 +1,56 @@
+"""Scheduling module using APScheduler for IST execution."""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+
+import pytz
+from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+LOGGER = logging.getLogger(__name__)
+IST = pytz.timezone("Asia/Kolkata")
+
+
+def is_trading_day(dt: datetime) -> bool:
+    """Simple trading-day check.
+
+    Weekends are skipped. If `pandas_market_calendars` is installed, XBOM holiday calendar
+    is used for better exchange holiday detection.
+    """
+    local_dt = dt.astimezone(IST)
+    if local_dt.weekday() >= 5:
+        return False
+
+    try:
+        import pandas_market_calendars as mcal
+
+        cal = mcal.get_calendar("XBOM")
+        session = cal.schedule(start_date=local_dt.date(), end_date=local_dt.date())
+        return not session.empty
+    except Exception:  # noqa: BLE001
+        return True
+
+
+def start_scheduler(task_callable) -> None:
+    """Run task daily at 15:35 IST, Monday-Friday."""
+
+    def wrapped_task() -> None:
+        now = datetime.now(tz=IST)
+        if not is_trading_day(now):
+            LOGGER.info("Skipping run on non-trading day: %s", now.date())
+            return
+        LOGGER.info("Starting scheduled job at %s", now.isoformat())
+        task_callable()
+
+    scheduler = BlockingScheduler(timezone=IST)
+    scheduler.add_job(
+        wrapped_task,
+        CronTrigger(day_of_week="mon-fri", hour=15, minute=35, timezone=IST),
+        id="sensex_daily_post_market",
+        replace_existing=True,
+    )
+
+    LOGGER.info("Scheduler armed: 15:35 IST, Monday-Friday")
+    scheduler.start()
