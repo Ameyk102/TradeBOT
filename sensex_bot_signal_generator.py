@@ -93,4 +93,3 @@ def generate_signals(indicator_data: Dict[str, pd.DataFrame], top_n: int = 10) -
     buys = sorted(buys, key=lambda x: x.signal_score, reverse=True)[:top_n]
     sells = sorted(sells, key=lambda x: x.signal_score, reverse=True)[:top_n]
     return buys + sells
-#Commit from Vivek
